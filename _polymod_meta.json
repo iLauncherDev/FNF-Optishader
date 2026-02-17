@@ -1,0 +1,12 @@
+{
+  "title": "Optishader",
+  "description": "Optimize some intensive shaders.",
+  "contributors": [
+    {
+      "name": "iLauncherDev"
+    }
+  ],
+  "api_version": "0.8.0",
+  "mod_version": "1.0.0",
+  "license": "MIT"
+}
