@@ -16,6 +16,9 @@ uniform float str;
 uniform float thr;
 uniform float angOffset;
 
+uniform float angCos;
+uniform float angSin;
+
 uniform sampler2D altMask;
 uniform bool useMask;
 uniform float thr2;
@@ -35,6 +38,7 @@ const vec3 grayscaleValues = vec3(0.3098, 0.6078, 0.0823);
 const vec3 lumaValue = vec3(0.2126, 0.7152, 0.0722);
 
 const float rgb_samples_norm = 1.0 / 3.0;
+const float edgeThreshold = 0.10;
 
 // ============================
 // FAST COLOR ADJUST
@@ -94,26 +98,26 @@ float getThreshold(vec2 uv)
     return threshold;
 }
 
-float grayAA(float c, vec2 uv, vec2 ratio)
+#define cenW 2.0
+#define croW 4.0
+#define diaW 8.0
+#define samples(n) (cenW + (croW * 4.0 + diaW * 4.0) * n)
+
+float grayAA(float c, vec2 uv, vec2 ratio, vec2 size)
 {
-    vec2 ratioCro = ratio * 1.000;
-    vec2 ratioDia = ratio * 1.000;
+    if (AA_STAGES <= 1.0)
+        return c;
 
-    vec2 l   = uv + vec2(-1.0,  0.0) * ratioCro;
-    vec2 r   = uv + vec2( 1.0,  0.0) * ratioCro;
-    vec2 u   = uv + vec2( 0.0, -1.0) * ratioCro;
-    vec2 d   = uv + vec2( 0.0,  1.0) * ratioCro;
+    vec2 l   = uv + vec2(-1.0,  0.0) * ratio;
+    vec2 r   = uv + vec2( 1.0,  0.0) * ratio;
+    vec2 u   = uv + vec2( 0.0, -1.0) * ratio;
+    vec2 d   = uv + vec2( 0.0,  1.0) * ratio;
 
-    vec2 ul   = uv + vec2(-1.0, -1.0) * ratioDia;
-    vec2 ur   = uv + vec2( 1.0, -1.0) * ratioDia;
-    vec2 dl   = uv + vec2(-1.0,  1.0) * ratioDia;
-    vec2 dr   = uv + vec2( 1.0,  1.0) * ratioDia;
+    vec2 ul   = uv + vec2(-1.0, -1.0) * ratio;
+    vec2 ur   = uv + vec2( 1.0, -1.0) * ratio;
+    vec2 dl   = uv + vec2(-1.0,  1.0) * ratio;
+    vec2 dr   = uv + vec2( 1.0,  1.0) * ratio;
 
-    float cenW = 2.0;
-    float croW = 4.0;
-    float diaW = 8.0;
-
-    float samples = cenW + croW * 4.0 + diaW * 4.0;
     float sum = c * cenW;
 
     sum += getGrayTex(l) * croW;
@@ -126,16 +130,14 @@ float grayAA(float c, vec2 uv, vec2 ratio)
     sum += getGrayTex(dl) * diaW;
     sum += getGrayTex(dr) * diaW;
 
-    return sum * (1.0 / samples);
+    return sum * (1.0 / samples(1.0));
 }
 
 // ============================
 // DROP SHADOW / RIM
 // ============================
 
-const float edgeThreshold = 0.10;
-
-vec4 createDropShadowEx(vec2 uv, vec2 ratio)
+vec4 createDropShadowEx(vec2 uv, vec2 ratio, vec2 size)
 {
     vec4 color4 = texture2D(bitmap, uv);
 
@@ -145,13 +147,9 @@ vec4 createDropShadowEx(vec2 uv, vec2 ratio)
     float color3_light = getGrayRGB(color3_no_effect);
     float threshold = getThreshold(uv);
 
-    float angle = ang + angOffset;
-    float c = cos(angle);
-    float s = sin(angle);
-
     vec2 checked = vec2(
-        uv.x + (dist * c * ratio.x),
-        uv.y - (dist * s * ratio.y)
+        uv.x + (dist * angCos * ratio.x),
+        uv.y - (dist * angSin * ratio.y)
     );
 
     float shadowAlpha = 0.0;
@@ -164,13 +162,10 @@ vec4 createDropShadowEx(vec2 uv, vec2 ratio)
         shadowAlpha = texture2D(bitmap, checked).a;
     }
 
-    float binaryEdge = step(threshold, color3_light);
-    float intensity = smoothstep(threshold - edgeThreshold, threshold + edgeThreshold, grayAA(color3_light, uv, ratio));
-
+    float intensity = smoothstep(threshold - edgeThreshold, threshold + edgeThreshold, grayAA(color3_light, uv, ratio, size));
     float rim = (1.0 - (shadowAlpha * str)) * intensity;
 
     color3 += dropColor * rim;
-    //color3 += dropColor * rim * edgeProtection;
 
     return vec4(color3 * color4.a, color4.a);
 }
@@ -181,5 +176,5 @@ vec4 createDropShadowEx(vec2 uv, vec2 ratio)
 
 void main()
 {
-    gl_FragColor = createDropShadowEx(openfl_TextureCoordv, 1.0 / openfl_TextureSize.xy);
+    gl_FragColor = createDropShadowEx(openfl_TextureCoordv, 1.0 / openfl_TextureSize.xy, openfl_TextureSize.xy);
 }

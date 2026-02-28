@@ -36,6 +36,8 @@ class DropShadowShader extends FlxRuntimeShader
    */
   public var angle(default, set):Float;
 
+  public var angleOffset(default, set):Float;
+
   /**
    * The distance or size of the drop shadow, in pixels,
    * relative to the texture itself... NOT the camera.
@@ -158,6 +160,16 @@ class DropShadowShader extends FlxRuntimeShader
     ];
   }
 
+  function updateAng()
+  {
+    var newAngle = (angle + angleOffset) * FlxAngle.TO_RAD;
+    var cos = Math.cos(newAngle);
+    var sin = Math.sin(newAngle);
+
+    this.setFloat('angCos', cos);
+    this.setFloat('angSin', sin);
+  }
+
   /**
    * Sets all 4 adjust color values.
    * @param b The brightness value
@@ -250,8 +262,15 @@ class DropShadowShader extends FlxRuntimeShader
   function set_angle(val:Float):Float
   {
     angle = val;
-    this.setFloat('ang', val * FlxAngle.TO_RAD);
-    return angle;
+    updateAng();
+    return val;
+  }
+
+  function set_angleOffset(val:Float):Float
+  {
+    angleOffset = val;
+    updateAng();
+    return val;
   }
 
   function set_distance(val:Float):Float
@@ -323,7 +342,7 @@ class DropShadowShader extends FlxRuntimeShader
     this.setFloatArray('uFrameBounds', [frame.uv.left, frame.uv.top, frame.uv.right, frame.uv.bottom]);
 
     // if a frame is rotated the shader will look completely wrong lol
-    this.setFloat('angOffset', frame.angle * FlxAngle.TO_RAD);
+    angleOffset = frame.angle;
   }
 
   function set_altMaskImage(_bitmapData:BitmapData):BitmapData
@@ -368,6 +387,6 @@ class DropShadowShader extends FlxRuntimeShader
 
     useAltMask = false;
 
-    this.setFloat('angOffset', 0);
+    angleOffset = 0;
   }
 }
