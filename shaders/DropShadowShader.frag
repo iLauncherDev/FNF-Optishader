@@ -101,34 +101,26 @@ float getThreshold(vec2 uv)
 #define cenW 2.0
 #define croW 4.0
 #define diaW 8.0
-#define samples(n) (cenW + (croW * 4.0 + diaW * 4.0) * n)
+#define samples(n) ((croW * 4.0 + diaW * 4.0 + cenW) * n)
 
 float grayAA(float c, vec2 uv, vec2 ratio, vec2 size)
 {
     if (AA_STAGES <= 1.0)
         return c;
 
-    vec2 l   = uv + vec2(-1.0,  0.0) * ratio;
-    vec2 r   = uv + vec2( 1.0,  0.0) * ratio;
-    vec2 u   = uv + vec2( 0.0, -1.0) * ratio;
-    vec2 d   = uv + vec2( 0.0,  1.0) * ratio;
-
-    vec2 ul   = uv + vec2(-1.0, -1.0) * ratio;
-    vec2 ur   = uv + vec2( 1.0, -1.0) * ratio;
-    vec2 dl   = uv + vec2(-1.0,  1.0) * ratio;
-    vec2 dr   = uv + vec2( 1.0,  1.0) * ratio;
+    vec2 off = max(fwidth(uv), ratio) * 1.717;
 
     float sum = c * cenW;
 
-    sum += getGrayTex(l) * croW;
-    sum += getGrayTex(r) * croW;
-    sum += getGrayTex(u) * croW;
-    sum += getGrayTex(d) * croW;
+    sum += getGrayTex(uv + vec2(-off.x,   0.0  )) * croW;
+    sum += getGrayTex(uv + vec2( off.x,   0.0  )) * croW;
+    sum += getGrayTex(uv + vec2( 0.0,    -off.y)) * croW;
+    sum += getGrayTex(uv + vec2( 0.0,     off.y)) * croW;
 
-    sum += getGrayTex(ul) * diaW;
-    sum += getGrayTex(ur) * diaW;
-    sum += getGrayTex(dl) * diaW;
-    sum += getGrayTex(dr) * diaW;
+    sum += getGrayTex(uv + vec2(-off.x,   off.y)) * diaW;
+    sum += getGrayTex(uv + vec2( off.x,   off.y)) * diaW;
+    sum += getGrayTex(uv + vec2(-off.x,  -off.y)) * diaW;
+    sum += getGrayTex(uv + vec2( off.x,  -off.y)) * diaW;
 
     return sum * (1.0 / samples(1.0));
 }
