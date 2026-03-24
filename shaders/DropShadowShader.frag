@@ -1,5 +1,18 @@
 #pragma header
 
+#ifdef GL_ES
+// Funkin crew fix this!
+//    #ifdef GL_OES_standard_derivatives
+//        #define HAS_DERIVATIVES
+//    #endif
+#else
+    #if __VERSION__ >= 130
+        #define HAS_DERIVATIVES
+    #elif defined(GL_ARB_derivative_control)
+        #define HAS_DERIVATIVES
+    #endif
+#endif
+
 // This shader aims to mostly recreate how Adobe Animate/Flash handles drop shadows, but its main use here is for rim lighting.
 
 // this shader also includes a recreation of the Animate/Flash "Adjust Color" filter,
@@ -32,13 +45,10 @@ uniform float brightness;
 
 uniform float AA_STAGES;
 
-const float edgeSoftness = 1.0 / 16.0;
+varying vec2 dropShader_TextureRatio;
 
 const vec3 grayscaleValues = vec3(0.3098, 0.6078, 0.0823);
 const vec3 lumaValue = vec3(0.2126, 0.7152, 0.0722);
-
-const float rgb_samples_norm = 1.0 / 3.0;
-const float edgeThreshold = 0.10;
 
 // ============================
 // FAST COLOR ADJUST
@@ -63,9 +73,19 @@ float getLumaRGB(vec3 color)
     return dot(color.rgb, lumaValue);
 }
 
+vec4 getTexRGBA(vec2 uv)
+{
+    return texture2D(bitmap, uv);
+}
+
 float getGrayTex(vec2 uv)
 {
-    return getGrayRGB(texture2D(bitmap, uv).rgb);
+    return getGrayRGB(getTexRGBA(uv).rgb);
+}
+
+float getLumaTex(vec2 uv)
+{
+    return getLumaRGB(getTexRGBA(uv).rgb);
 }
 
 vec3 normalizeRGB(vec3 color)
@@ -98,31 +118,26 @@ float getThreshold(vec2 uv)
     return threshold;
 }
 
-#define cenW 2.0
-#define croW 4.0
-#define diaW 8.0
-#define samples(n) ((croW * 4.0 + diaW * 4.0 + cenW) * n)
-
-float grayAA(float c, vec2 uv, vec2 ratio, vec2 size)
+float lwidth_manual(float center, vec2 uv, vec2 px)
 {
     if (AA_STAGES <= 1.0)
-        return c;
+        return 0.0;
 
-    vec2 off = max(fwidth(uv), ratio) * 1.717;
+    vec3 p2x1 = getTexRGBA(uv + vec2( 1.0,  0.0) * px).rgb;
+    vec3 p1x2 = getTexRGBA(uv + vec2( 0.0,  1.0) * px).rgb;
+    vec3 p2x2 = getTexRGBA(uv + vec2( 1.0,  1.0) * px).rgb;
 
-    float sum = c * cenW;
+    float right     = getLumaRGB(p2x1);
+    float down      = getLumaRGB(p1x2);
+    float diagonal  = getLumaRGB(p2x2);
 
-    sum += getGrayTex(uv + vec2(-off.x,   0.0  )) * croW;
-    sum += getGrayTex(uv + vec2( off.x,   0.0  )) * croW;
-    sum += getGrayTex(uv + vec2( 0.0,    -off.y)) * croW;
-    sum += getGrayTex(uv + vec2( 0.0,     off.y)) * croW;
+    float dx = abs(right - center);
+    float dy = abs(down - center);
+    float dd = abs(diagonal - center);
 
-    sum += getGrayTex(uv + vec2(-off.x,   off.y)) * diaW;
-    sum += getGrayTex(uv + vec2( off.x,   off.y)) * diaW;
-    sum += getGrayTex(uv + vec2(-off.x,  -off.y)) * diaW;
-    sum += getGrayTex(uv + vec2( off.x,  -off.y)) * diaW;
+    float delta = ((dx + dy + dd * 0.7) / (1.0 + 1.0 + 0.7)) * 2.0;
 
-    return sum * (1.0 / samples(1.0));
+    return delta;
 }
 
 // ============================
@@ -133,11 +148,20 @@ vec4 createDropShadowEx(vec2 uv, vec2 ratio, vec2 size)
 {
     vec4 color4 = texture2D(bitmap, uv);
 
+#ifdef HAS_DERIVATIVES
+    vec2 px = fwidth(uv);
+#else
+    vec2 px = ratio;
+#endif
+
+    float color3_light = getLumaRGB(color4.rgb);
+    float delta = lwidth_manual(color3_light, uv, px);
+
     vec3 color3_no_effect = color4.a > 0.0 ? color4.rgb / color4.a : color4.rgb;
     vec3 color3 = applyHSBCEffect(color3_no_effect);
 
-    float color3_light = getGrayRGB(color3_no_effect);
-    float threshold = getThreshold(uv);
+    float threshold = max(getThreshold(uv) - 0.05, 0.0);
+    float intensity = smoothstep(threshold - delta, threshold + delta, color3_light);
 
     vec2 checked = vec2(
         uv.x + (dist * angCos * ratio.x),
@@ -154,7 +178,6 @@ vec4 createDropShadowEx(vec2 uv, vec2 ratio, vec2 size)
         shadowAlpha = texture2D(bitmap, checked).a;
     }
 
-    float intensity = smoothstep(threshold - edgeThreshold, threshold + edgeThreshold, grayAA(color3_light, uv, ratio, size));
     float rim = (1.0 - (shadowAlpha * str)) * intensity;
 
     color3 += dropColor * rim;
@@ -168,5 +191,5 @@ vec4 createDropShadowEx(vec2 uv, vec2 ratio, vec2 size)
 
 void main()
 {
-    gl_FragColor = createDropShadowEx(openfl_TextureCoordv, 1.0 / openfl_TextureSize.xy, openfl_TextureSize.xy);
+    gl_FragColor = createDropShadowEx(openfl_TextureCoordv, dropShader_TextureRatio, openfl_TextureSize.xy);
 }

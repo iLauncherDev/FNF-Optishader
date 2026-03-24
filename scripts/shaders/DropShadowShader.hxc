@@ -367,7 +367,7 @@ class DropShadowShader extends FlxRuntimeShader
 
   public function new()
   {
-    super(Assets.getText(Paths.frag('DropShadowShader')));
+    super(Assets.getText(Paths.frag('DropShadowShader')), Assets.getText(Paths.vert('DropShadowShader')));
 
     offsetThr = 0.00;
 
